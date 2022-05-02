@@ -1,3 +1,5 @@
+package example;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,6 +13,7 @@ public class EvalVisitor extends CalcBaseVisitor<Integer>{
         String id = ctx.ID().getText();  // id is left-hand side of '='
         int value = visit(ctx.expr());   // compute value of expression on right
         memory.put(id, value);           // store it in our memory
+        System.out.println(id+" = "+value);
         return value;
     }
 
@@ -19,19 +22,21 @@ public class EvalVisitor extends CalcBaseVisitor<Integer>{
     public Integer visitPrintExpr(CalcParser.PrintExprContext ctx) {
         Integer value = visit(ctx.expr()); // evaluate the expr child
         System.out.println(value);         // print the result
+        System.out.println("end");
         return 0;                          // return dummy value
     }
 
     /** INT */
     @Override
     public Integer visitInt(CalcParser.IntContext ctx) {
-        return Integer.valueOf(ctx.INT().getText());
+        System.out.println(Integer.valueOf(ctx.INT().getText()));return Integer.valueOf(ctx.INT().getText());
     }
 
     /** ID */
     @Override
     public Integer visitId(CalcParser.IdContext ctx) {
         String id = ctx.ID().getText();
+        System.out.println(id);
         if ( memory.containsKey(id) ) return memory.get(id);
         return 0;
     }
@@ -41,7 +46,11 @@ public class EvalVisitor extends CalcBaseVisitor<Integer>{
     public Integer visitMulDiv(CalcParser.MulDivContext ctx) {
         int left = visit(ctx.expr(0));  // get value of left subexpression
         int right = visit(ctx.expr(1)); // get value of right subexpression
-        if ( ctx.op.getType() == CalcParser.MUL ) return left * right;
+        if ( ctx.op.getType() == CalcParser.MUL ) {
+            System.out.println("*");
+            return left * right;
+        }
+        System.out.println("/");
         return left / right; // must be DIV
     }
 
@@ -50,7 +59,11 @@ public class EvalVisitor extends CalcBaseVisitor<Integer>{
     public Integer visitAddSub(CalcParser.AddSubContext ctx) {
         int left = visit(ctx.expr(0));  // get value of left subexpression
         int right = visit(ctx.expr(1)); // get value of right subexpression
-        if ( ctx.op.getType() == CalcParser.ADD ) return left + right;
+        if ( ctx.op.getType() == CalcParser.ADD ) {
+            System.out.println("+");
+            return left + right;
+        }
+        System.out.println("-");
         return left - right; // must be SUB
     }
 

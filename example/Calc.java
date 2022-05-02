@@ -1,3 +1,4 @@
+package example;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -5,7 +6,6 @@ import java.io.InputStream;
 
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.*;
-/*
 public class Calc {
 
     public static void main(String[] args) throws Exception {
@@ -23,7 +23,8 @@ public class Calc {
         eval.visit(tree);
 
     }
-}*/
+}
+/*
 public class Calc {
 
     public static void main(String[] args) throws Exception {
@@ -41,4 +42,4 @@ public class Calc {
         // print LISP-style tree
         System.out.println(tree.toStringTree(parser));
     }
-}
+}*/

@@ -1,3 +1,5 @@
+package example;
+
 public class DirectiveListener extends CalcBaseListener {
 
     @Override
@@ -8,24 +10,24 @@ public class DirectiveListener extends CalcBaseListener {
     @Override
     public void exitAssign(CalcParser.AssignContext ctx) {
         String id = ctx.ID().getText();
-        System.out.println("STR " + id);
+        System.out.println("= " + id);
     }
 
     @Override
     public void exitMulDiv(CalcParser.MulDivContext ctx) {
         if (ctx.op.getType() == CalcParser.MUL) {
-            System.out.println("MUL");
+            System.out.println("*");
         } else {
-            System.out.println("DIV");
+            System.out.println("/");
         }
     }
 
     @Override
     public void exitAddSub(CalcParser.AddSubContext ctx) {
         if (ctx.op.getType() == CalcParser.ADD) {
-            System.out.println("ADD");
+            System.out.println("+");
         } else {
-            System.out.println("SUB");
+            System.out.println("-");
         }
     }
 
