@@ -1,13 +1,19 @@
 struct test{
    float a1;
    boolean a2,a3;
-   char a4 = 333;
+   int a4 = 333;
    int array1[4] = [1,2,3];
 };
+
 struct m1;
+
+struct m2{};
 module mm{
 struct test2{
-::test::std_msgs b1;
+struct test3{
+int8 test;
+} m1;
+::geometry_msg::PoseStamped b1;
 long double b2 = -4 | 2 ^ 2 & 2 >> 2 + 2 * 2;
 unsigned long long b3,b4,b5 = 0;
 string s1 = "hello world!";
@@ -16,8 +22,6 @@ float b7 = 0.9e7f;
 char b8 = 's';
 int array1[4] = [1,2,3];
 int b9_9 = 10l;
-struct test3{
-int8 test = 0;
-}m1;
+
 };
 };

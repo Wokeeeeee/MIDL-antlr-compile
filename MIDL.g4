@@ -1,6 +1,7 @@
 grammar MIDL;
 
-tokens{MODULE,
+tokens
+{MODULE,
 STRUCT,
 BOOLEAN,
 SHORT,

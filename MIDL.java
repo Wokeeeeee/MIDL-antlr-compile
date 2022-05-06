@@ -18,7 +18,9 @@ public class MIDL {
         System.out.println(tree.toStringTree(parser));
 
         ASTGenerator eval = new ASTGenerator();
-        // 开始遍历语法分析树
         eval.visit(tree);
+
+        ASTGeneratorToTXT g = new ASTGeneratorToTXT();
+        g.visit(tree);
     }
 }

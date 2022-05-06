@@ -1,22 +1,36 @@
-import javax.swing.*;
+import java.io.*;
 
-class ASTGenerator extends MIDLBaseVisitor<String> {
+class ASTGeneratorToTXT extends MIDLBaseVisitor<String> {
+    public PrintWriter out;
+    public int tab_times;
+
+
+    public ASTGeneratorToTXT() throws FileNotFoundException {
+        File file = new File("ASTOut.txt");
+        out = new PrintWriter(file);
+        tab_times = 0;
+    }
+
+
     @Override
     public String visitSpecification(MIDLParser.SpecificationContext ctx) {
-        System.out.print("[specification ");
         for (int i = 0; i < ctx.getChildCount(); i++) {
             visit(ctx.getChild(i));
         }
-        System.out.print("]");
+        out.close();//最后执行
         return null;
     }
 
+    /**
+     * definiton -> type_decl“;”| module “;”
+     *
+     * @param ctx
+     * @return
+     */
     @Override
     public String visitDefinition(MIDLParser.DefinitionContext ctx) {
-        System.out.print("[definition ");
         visit(ctx.getChild(0));
-        System.out.print(ctx.getChild(1).getText());
-        System.out.print("]");
+        out.println("\n");
         return null;
     }
 
@@ -27,15 +41,12 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitModule(MIDLParser.ModuleContext ctx) {
-        System.out.print("[module ");
-        System.out.print(ctx.getChild(0) + " ");
-        System.out.print(ctx.ID() + " ");
-        System.out.print(ctx.getChild(2) + " ");
+        String tab = "\t".repeat(tab_times);
+        out.print(tab + ctx.getChild(0) + " ");
+        out.print(ctx.ID() + "\n");
         for (int i = 3; i < ctx.getChildCount() - 1; i++) {
             visit(ctx.getChild(i));
         }
-        System.out.print("}");
-        System.out.print("]");
         return null;
     }
 
@@ -47,14 +58,15 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitType_decl(MIDLParser.Type_declContext ctx) {
-        System.out.print("[type_decl ");
+        tab_times++;
         if (ctx.getChildCount() == 1) {//struct_type
+            out.print("\t".repeat(tab_times));
             visit(ctx.getChild(0));
         } else {
-            System.out.print(ctx.getChild(0).getText() + " ");
-            System.out.print(ctx.ID());
+            out.print("\t".repeat(tab_times) + ctx.getChild(0).getText() + " ");
+            out.print(ctx.ID() + "\n");
         }
-        System.out.print("]");
+        tab_times--;
         return null;
     }
 
@@ -65,13 +77,11 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitStruct_type(MIDLParser.Struct_typeContext ctx) {
-        System.out.print("[struct_type ");
-        System.out.print(ctx.getChild(0).getText() + " ");
-        System.out.print(ctx.ID() + " ");
-        System.out.print(ctx.getChild(2).getText() + " ");
+        out.print(ctx.getChild(0).getText() + " ");
+        out.print(ctx.ID() + "\n");
+        tab_times++;
         visit(ctx.getChild(3));
-        System.out.print(ctx.getChild(4).getText() + " ");
-        System.out.print("]");
+        tab_times--;
         return null;
     }
 
@@ -83,19 +93,23 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitMember_list(MIDLParser.Member_listContext ctx) {
-        System.out.print("[member_list ");
         int n = ctx.getChildCount();
         if (n == 0) {
-            System.out.print("]");
+            out.print("\t".repeat(tab_times)+"empty\n");
             return null;
-        } else {
-            for (int i = 0; i < n / 3; i++) {
-                visit(ctx.getChild(3 * i));
-                visit(ctx.getChild(3 * i + 1));
-                System.out.print(ctx.getChild(3 * i + 2).getText());
-            }
         }
-        System.out.print("]");
+
+        for (int i = 0; i < n / 3; i++) {
+            out.print("\t".repeat(tab_times)+"member\n");
+            tab_times++;
+            out.print("\t".repeat(tab_times)+"type_spec\n"+"\t".repeat(tab_times+1));
+            visit(ctx.getChild(3 * i));
+            out.print("\n"+"\t".repeat(tab_times)+"declarators\n"+"\t".repeat(tab_times+1));
+            visit(ctx.getChild(3 * i + 1));
+            out.print("\n\n");
+            tab_times--;
+        }
+
         return null;
     }
 
@@ -107,9 +121,14 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitType_spec(MIDLParser.Type_specContext ctx) {
-        System.out.print("[type_spec ");
-        visit(ctx.getChild(0));
-        System.out.print("]");
+        if (ctx.struct_type() != null) {
+            visit(ctx.struct_type());
+            out.print("\t".repeat(tab_times));
+        }else {
+            tab_times++;
+            visit(ctx.getChild(0));
+            tab_times--;
+        }
         return null;
     }
 
@@ -121,11 +140,9 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitScoped_name(MIDLParser.Scoped_nameContext ctx) {
-        System.out.print("[scoped_name ");
         for (int i = 0; i < ctx.getChildCount(); i++) {
-            System.out.print(ctx.getChild(i));
+            out.print(ctx.getChild(i)+" ");
         }
-        System.out.print("]");
         return null;
     }
 
@@ -137,13 +154,11 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitBase_type_spec(MIDLParser.Base_type_specContext ctx) {
-        System.out.print("[base_type_spec ");
         if (ctx.getChild(0).getChildCount() == 0) {
-            System.out.print(ctx.getChild(0));
+            out.print(ctx.getChild(0) + " ");
         } else {
             visit(ctx.getChild(0));
         }
-        System.out.print("]");
         return null;
     }
 
@@ -155,9 +170,7 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitFloating_pt_type(MIDLParser.Floating_pt_typeContext ctx) {
-        System.out.print("[floating_pt_type ");
-        System.out.print(ctx.getChild(0).getText());
-        System.out.print("]");
+        out.print(ctx.getChild(0).getText() + " ");
         return null;
     }
 
@@ -169,29 +182,23 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitInteger_type(MIDLParser.Integer_typeContext ctx) {
-        System.out.print("[integer_type ");
         visit(ctx.getChild(0));
-        System.out.print("]");
         return null;
     }
 
     @Override
     public String visitSigned_int(MIDLParser.Signed_intContext ctx) {
-        System.out.print("[signed_int ");
         for (int i = 0; i < ctx.getChildCount(); i++) {
-            System.out.print(ctx.getChild(i).getText());
+            out.print(ctx.getChild(i).getText()+" ");
         }
-        System.out.print("]");
         return null;
     }
 
     @Override
     public String visitUnsigned_int(MIDLParser.Unsigned_intContext ctx) {
-        System.out.print("[unsigned_int ");
         for (int i = 0; i < ctx.getChildCount(); i++) {
-            System.out.print(ctx.getChild(i).getText());
+            out.print(ctx.getChild(i).getText()+" ");
         }
-        System.out.print("]");
         return null;
     }
 
@@ -203,16 +210,14 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitDeclarators(MIDLParser.DeclaratorsContext ctx) {
-        System.out.print("[declarators ");
         visit(ctx.getChild(0));
         int n = ctx.getChildCount() - 1;
         if (n != 0) {
             for (int i = 1; i < n; i = i + 2) {
-                System.out.print(ctx.getChild(i) + " ");
+                out.print(ctx.getChild(i) + " ");
                 visit(ctx.getChild(i + 1));
             }
         }
-        System.out.print("]");
         return null;
     }
 
@@ -224,9 +229,7 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitDeclarator(MIDLParser.DeclaratorContext ctx) {
-        System.out.print("[declarator ");
         visit(ctx.getChild(0));
-        System.out.print("]");
         return null;
     }
 
@@ -238,13 +241,14 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitSimple_declarator(MIDLParser.Simple_declaratorContext ctx) {
-        System.out.print("[simple_declarator ");
-        System.out.print(ctx.ID());
+        out.print(ctx.ID());
         if (ctx.getChildCount() != 1) {
-            System.out.print("= ");
+            tab_times++;
+            out.print("\n"+"\t".repeat(tab_times+1)+"assign");
+            out.print("\n"+"\t".repeat(tab_times+1));
             visit(ctx.or_expr());
+            tab_times--;
         }
-        System.out.print("]");
         return null;
     }
 
@@ -256,16 +260,17 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitArray_declarator(MIDLParser.Array_declaratorContext ctx) {
-        System.out.print("[array_declarator ");
-        System.out.print(ctx.ID() + " ");
-        System.out.print("[ ");
+        out.print(ctx.ID() + " ");
+        out.print("[ ");
         visit(ctx.or_expr());
-        System.out.print(" ] ");
+        out.print(" ] ");
         if (ctx.getChildCount() != 4) {
-            System.out.print("= ");
+            tab_times++;
+            out.print("\n"+"\t".repeat(tab_times+1)+"assign");
+            out.print("\n"+"\t".repeat(tab_times+1));
             visit(ctx.exp_list());
+            tab_times--;
         }
-        System.out.print("]");
         return null;
     }
 
@@ -277,17 +282,16 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitExp_list(MIDLParser.Exp_listContext ctx) {
-        System.out.print("[exp_list ");
-        System.out.print("[ ");
+        out.print("[ ");
         visit(ctx.getChild(1));
-        int n = (ctx.getChildCount() - 3) / 2 ;
+        int n = (ctx.getChildCount() - 3) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(", ");
+            out.print(", ");
             visit(ctx.getChild(2 * i + 3));
         }
-        System.out.print("] ");
-        System.out.print("]");
+        out.print("] ");
         return null;
+
     }
 
     /**
@@ -298,14 +302,12 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitOr_expr(MIDLParser.Or_exprContext ctx) {
-        System.out.print("[or_expr ");
         visit(ctx.xor_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.xor_expr(i + 1));
         }
-        System.out.print("]");
         return null;
     }
 
@@ -317,15 +319,12 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitXor_expr(MIDLParser.Xor_exprContext ctx) {
-        System.out.print("[xor_expr ");
         visit(ctx.and_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.and_expr(i + 1));
         }
-        System.out.print("]");
-        System.out.print("]");
         return null;
     }
 
@@ -337,14 +336,12 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitAnd_expr(MIDLParser.And_exprContext ctx) {
-        System.out.print("[and_expr ");
         visit(ctx.shift_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.shift_expr(i + 1));
         }
-        System.out.print("]");
         return null;
     }
 
@@ -356,40 +353,34 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitShift_expr(MIDLParser.Shift_exprContext ctx) {
-        System.out.print("[shift_expr ");
         visit(ctx.add_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.add_expr(i + 1));
         }
-        System.out.print("]");
         return null;
     }
 
     @Override
     public String visitAdd_expr(MIDLParser.Add_exprContext ctx) {
-        System.out.print("[add_expr ");
         visit(ctx.mult_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.mult_expr(i + 1));
         }
-        System.out.print("]");
         return null;
     }
 
     @Override
     public String visitMult_expr(MIDLParser.Mult_exprContext ctx) {
-        System.out.print("[mult_expr ");
         visit(ctx.unary_expr(0));
         int n = (ctx.getChildCount() - 1) / 2;
         for (int i = 0; i < n; i++) {
-            System.out.print(ctx.getChild(2 * i + 1));
+            out.print(ctx.getChild(2 * i + 1));
             visit(ctx.unary_expr(i + 1));
         }
-        System.out.print("]");
         return null;
     }
 
@@ -401,19 +392,17 @@ class ASTGenerator extends MIDLBaseVisitor<String> {
      */
     @Override
     public String visitUnary_expr(MIDLParser.Unary_exprContext ctx) {
-        System.out.print("[unary_expr ");
         if (ctx.getChildCount() != 1) {
-            System.out.print(ctx.getChild(0));
+            out.print(ctx.getChild(0));
         }
-//        System.out.println(ctx.literal());
+//        out.print();ln(ctx.literal());
         visit(ctx.literal());
         return null;
     }
 
     @Override
     public String visitLiteral(MIDLParser.LiteralContext ctx) {
-        System.out.print("[literal ");
-        System.out.print(ctx.getChild(0));
+        out.print(ctx.getChild(0));
         return null;
     }
 }
