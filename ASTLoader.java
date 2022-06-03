@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.regex.Pattern;
 
 class Member {
     String type;
@@ -91,9 +92,12 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     String namespace = "";
 
     //type check
-    String[] signed_int = {"short", "int16", "long", "int32", "long long", "int64", "int8"};
-    String[] unsigned_int = {"unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"};
-    String[] floating_pt_type = {"float", "double", "long double"};
+//    String[] signed_int = {"short", "int16", "long", "int32", "long long", "int64", "int8"};
+    ArrayList<String> signed_set = new ArrayList<>(List.of("short", "int16", "long", "int32", "long long", "int64", "int8"));
+    //    String[] unsigned_int = {"unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"};
+//    String[] floating_pt_type = {"float", "double", "long double"};
+    ArrayList<String> unsigned_set = new ArrayList<>(List.of("unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"));
+    ArrayList<String> floating_set = new ArrayList<>(List.of("float", "double", "long double"));
 
     /**
      * specification: (definition)+;
@@ -365,8 +369,53 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
             throw new RuntimeException("Semantic Error 1.1");
         }
         StringBuilder exp = new StringBuilder();
-        while (!exp_queue.isEmpty()) exp.append(exp_queue.poll()).append(" ");
+        while (!exp_queue.isEmpty()) {
+            exp.append(exp_queue.poll()).append(" ");
+        }
         //todo: 3 进行字面量类型检查
+        String dtype = symbol_stack.peek().strip();
+
+        if ((unsigned_set.contains(dtype) || signed_set.contains(dtype)) && !exp.toString().strip().isEmpty()) {
+            //3.3 判断是否为浮点数
+            Pattern pattern = Pattern.compile("[-+]?[0-9]*\\.[0-9]+");
+            if (pattern.matcher(exp.toString().strip()).matches()) {
+                System.err.println(
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                                "    semantic error 3.3: " +
+                                "It is an integer variable, but the literal is a floating-point type "
+                );
+                throw new RuntimeException("Semantic Error 3.3");
+            }
+
+            //3.1 整形变量,字面却是字符
+            String answer = ExpressionCalculator.calculate(exp.toString());
+//            System.out.println(name + " " + answer + " " + dtype);
+            try {
+                Long.parseLong(answer);
+            } catch (NumberFormatException e) {
+                System.err.println(
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                                "    semantic error 3.1: " +
+                                "It is an integer variable, but the literal is a wrong type  "
+                );
+                throw new RuntimeException("Semantic Error 3.1");
+            }
+
+            //3.2 short 越界
+            if (dtype.equals("short")) {
+                long tmp = Long.parseLong(answer);
+                if (tmp > Short.MAX_VALUE || tmp < Short.MIN_VALUE) {
+                    System.err.println(
+                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                                    "    semantic error 3.2: " +
+                                    "short is a signed short integer, the input number is out of bounds "
+                    );
+                    throw new RuntimeException("Semantic Error 3.2");
+                }
+            }
+
+
+        }
 
         declarator_map.put(name, exp.toString());
         valuables_names.add(name);
@@ -399,9 +448,42 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
             );
             throw new RuntimeException("Semantic Error 1.1");
         }
+
+
         //hashmap
         StringBuilder exp = new StringBuilder();
         while (!exp_queue.isEmpty()) exp.append(exp_queue.poll()).append(" ");
+
+        //3.4
+        String dtype = symbol_stack.peek().strip();
+        int num = Integer.parseInt(ExpressionCalculator.calculate(dtype.substring(dtype.indexOf("[") + 1, dtype.indexOf("]"))));
+        dtype = dtype.substring(0, dtype.indexOf("[")).strip();
+        String[] arrays = exp.toString().strip().split(" ");
+        if (arrays.length != num) {
+            System.err.println(
+                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                            "    semantic error 3.4.1: " +
+                            "The length of the array input is not the same as the declared length.  "
+            );
+            throw new RuntimeException("Semantic Error 3.4.1");
+        }
+        if ((unsigned_set.contains(dtype) || signed_set.contains(dtype)) && arrays.length != 0) {
+            try {
+                for (var a : arrays) {
+                    String answer = ExpressionCalculator.calculate(a);
+                    Integer.parseInt(answer);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println(
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                                "    semantic error 3.4.2: " +
+                                "The data entered in the array is not an integer variable.  "
+                );
+                throw new RuntimeException("Semantic Error 3.4.2");
+
+            }
+
+        }
         declarator_map.put(name, exp.toString());
         valuables_names.add(name);
         return null;
