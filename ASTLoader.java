@@ -20,10 +20,12 @@ class Member {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(type).append("   :\n");
+        sb.append("  type :  ").append(type);
         for (var entry : declarators.entrySet()) {
-            sb.append(entry.getKey()).append(" ").append(entry.getValue()).append("\n");
+            sb.append("  declarator:  ").append(entry.getKey());
+            if (!entry.getValue().isEmpty()) sb.append("  assign:  ").append(entry.getValue());
         }
+        sb.append("\n");
         return sb.toString();
     }
 }
@@ -73,11 +75,10 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         ParseTree tree = parser.specification();
         ASTLoader astLoader = new ASTLoader();
         astLoader.visit(tree);
-        //  for (var i : astLoader.symbol_stack) System.out.println(i);
+        for (var i : astLoader.structs_names) System.out.println(i);
         //  while (!astLoader.exp_queue.isEmpty()) System.out.print(astLoader.exp_queue.poll());
     }
 
-    TreeNode root = new TreeNode();
     String simple_exp = "";
     LinkedHashMap<String, String> declarator_map = new LinkedHashMap<>();
     Stack<String> symbol_stack = new Stack<>();
@@ -85,7 +86,14 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
 
 
     //semantic analysis
-    ArrayList<String> struct_names = new ArrayList<>();
+    ArrayList<String> valuables_names = new ArrayList<>(); //1.1 1.2
+    ArrayList<String> structs_names = new ArrayList<>();//1.3
+    String namespace = "";
+
+    //type check
+    String[] signed_int = {"short", "int16", "long", "int32", "long long", "int64", "int8"};
+    String[] unsigned_int = {"unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"};
+    String[] floating_pt_type = {"float", "double", "long double"};
 
     /**
      * specification: (definition)+;
@@ -122,12 +130,14 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
      */
     @Override
     public TreeNode visitModule(MIDLParser.ModuleContext ctx) {
+        namespace += ctx.ID().getText() + "::";
         TreeNode treeNode = new TreeNode();
         treeNode.nodetype = TreeNode.NODETYPE.MODULE;
         treeNode.module_id = ctx.ID().getText();
         for (int i = 0; i < ctx.getChildCount() - 4; i++) {
             treeNode.definitions.add(visit(ctx.definition(i)));
         }
+        namespace = namespace.substring(0, namespace.indexOf(ctx.ID().getText()));
         return treeNode;
     }
 
@@ -135,7 +145,17 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     public TreeNode visitType_decl(MIDLParser.Type_declContext ctx) {
         TreeNode treeNode = new TreeNode();
         if (ctx.getChildCount() > 1) {
+
+            if (structs_names.contains(namespace + ctx.ID().getText())) {
+                System.err.println(
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + namespace + ctx.ID().getText() + "'" +
+                                "    semantic error 1.3: " +
+                                "In the same module space, there cannot be structs with the same name.  "
+                );
+                throw new RuntimeException("Semantic Error 1.3");
+            }
             treeNode.struct_id = ctx.ID().getText();
+            structs_names.add(namespace + treeNode.struct_id);
             treeNode.nodetype = TreeNode.NODETYPE.STRUCT;
         } else {
             return visit(ctx.struct_type());
@@ -152,16 +172,26 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
      */
     @Override
     public TreeNode visitStruct_type(MIDLParser.Struct_typeContext ctx) {
+        if (structs_names.contains(namespace + ctx.ID().getText())) {
+            System.err.println(
+                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + namespace + ctx.ID().getText() + "'" +
+                            "    semantic error 1.3: " +
+                            "In the same module space, there cannot be structs with the same name.  "
+            );
+            throw new RuntimeException("Semantic Error 1.3");
+        }
         TreeNode treeNode = new TreeNode();
         treeNode.struct_id = ctx.ID().getText();
+        structs_names.add(namespace + treeNode.struct_id);
         treeNode.nodetype = TreeNode.NODETYPE.STRUCT;
         treeNode.members = visit(ctx.getChild(3)).members;
-        struct_names.clear();
+        valuables_names.clear();
         return treeNode;
     }
 
     /**
      * member_list: (type_spec declarators ';')*;
+     * 问题:如何处理type_spec是struct类型的问题
      *
      * @param ctx
      * @return
@@ -175,7 +205,6 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
             String type = symbol_stack.pop();
             Member m = new Member(type);
             m.declarators.putAll(declarator_map);
-            declarator_map.get(0);
             treeNode.members.add(m);
             declarator_map.clear();
 
@@ -193,9 +222,13 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     @Override
     public TreeNode visitType_spec(MIDLParser.Type_specContext ctx) {
         if (ctx.getChild(0).getChild(0).getText().equals("struct")) {
-            symbol_stack.push(ctx.getChild(0).getText().substring(0, ctx.getChild(0).getText().indexOf("{")));
+            TreeNode treeNode = visit(ctx.struct_type());
+            symbol_stack.push(treeNode.toString());
+            structs_names.remove(structs_names.size() - 1);
+            return treeNode;
+        } else {
+            return super.visitType_spec(ctx);
         }
-        return super.visitType_spec(ctx);
     }
 
     /**
@@ -206,11 +239,31 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
      */
     @Override
     public TreeNode visitScoped_name(MIDLParser.Scoped_nameContext ctx) {
-        String dtype = "";
+        StringBuilder dtype = new StringBuilder();
         for (int i = 0; i < ctx.getChildCount(); i++) {
-            dtype += ctx.getChild(i).getText();
+            if (i == 0 && ctx.getChild(i).getText().equals("::")) continue;
+            dtype.append(ctx.getChild(i).getText());
         }
-        symbol_stack.push(dtype);
+        if (!structs_names.contains(dtype.toString())) {
+            for (var name : structs_names) {
+                if (name.contains(dtype.toString())) {
+                    System.err.println(
+                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + dtype + "'" +
+                                    "    semantic error 2.2: " +
+                                    "The structure is defined, but the namespace reference is incorrect. "
+                    );
+                    throw new RuntimeException("Semantic Error 2.2");
+                }
+            }
+            System.err.println(
+                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + dtype + "'" +
+                            "    semantic error 2.1: " +
+                            "The struct must be declared before it can be used.  "
+            );
+            throw new RuntimeException("Semantic Error 2.1");
+        }
+
+        symbol_stack.push(dtype.toString());
         return null;
     }
 
@@ -303,7 +356,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
 
         //todo: 2.1 检查同一个struct下是否有同名变量
         // 在检查declarator的时候,检查一下当前的name是否和已经有的map冲突
-        if (struct_names.contains(name)) {
+        if (valuables_names.contains(name)) {
             System.err.println(
                     "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
                             "    semantic error 1.1: " +
@@ -313,10 +366,13 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         }
         StringBuilder exp = new StringBuilder();
         while (!exp_queue.isEmpty()) exp.append(exp_queue.poll()).append(" ");
+        //todo: 3 进行字面量类型检查
+
         declarator_map.put(name, exp.toString());
-        struct_names.add(name);
+        valuables_names.add(name);
         return null;
     }
+
 
     /**
      * array_declarator : ID '[' or_expr ']' ('=' exp_list )?;
@@ -335,7 +391,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
 
         visit(ctx.exp_list());
 
-        if (struct_names.contains(name)) {
+        if (valuables_names.contains(name)) {
             System.err.println(
                     "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
                             "    semantic error 1.1: " +
@@ -347,7 +403,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         StringBuilder exp = new StringBuilder();
         while (!exp_queue.isEmpty()) exp.append(exp_queue.poll()).append(" ");
         declarator_map.put(name, exp.toString());
-        struct_names.add(name);
+        valuables_names.add(name);
         return null;
     }
 
