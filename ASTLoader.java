@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 class Member {
     String type;
 
-    LinkedHashMap<String, String> declarators;
+    LinkedHashMap<String, String> declarators;//一条声明语句中对应的多个declarator,存储键值对<name, assign>
 
     public Member(String type) {
         this.type = type;
@@ -51,7 +51,6 @@ class TreeNode {
     //struct
     public String struct_id;
     public ArrayList<Member> members = new ArrayList<>();//can be null
-    public ArrayList<TreeNode> inner_structs = new ArrayList<>();
 
     @Override
     public String toString() {
@@ -103,10 +102,9 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         ParseTree tree = parser.specification();
         ASTLoader astLoader = new ASTLoader();
         astLoader.visit(tree);
-//        for (var i : astLoader.structs_names) System.out.println(i);
-        //  while (!astLoader.exp_queue.isEmpty()) System.out.print(astLoader.exp_queue.poll());
-    }
+  }
 
+    //load ast
     String simple_exp = "";
     LinkedHashMap<String, String> declarator_map = new LinkedHashMap<>();
     Stack<String> symbol_stack = new Stack<>();
@@ -177,7 +175,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
 
             if (structs_names.contains(namespace + ctx.ID().getText())) {
                 System.err.println(
-                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + namespace + ctx.ID().getText() + "'" +
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated struct name '" + namespace + ctx.ID().getText() + "'" +
                                 "    semantic error 1.3: " +
                                 "In the same module space, there cannot be structs with the same name.  "
                 );
@@ -269,7 +267,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     @Override
     public TreeNode visitScoped_name(MIDLParser.Scoped_nameContext ctx) {
         StringBuilder dtype = new StringBuilder();
-        dtype.append(namespace);
+        //dtype.append(namespace);
         for (int i = 0; i < ctx.getChildCount(); i++) {
             if (i == 0 && ctx.getChild(i).getText().equals("::")) continue;
             dtype.append(ctx.getChild(i).getText());
@@ -277,14 +275,16 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         if (!structs_names.contains(dtype.toString())) {
             for (var name : structs_names) {
                 if (name.contains(dtype.toString())) {
+                    //todo:semantic error 2.2
                     System.err.println(
-                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + dtype + "'" +
+                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " undeclarated name '" + dtype + "'" +
                                     "    semantic error 2.2: " +
                                     "The structure is defined, but the namespace reference is incorrect. "
                     );
                     throw new RuntimeException("Semantic Error 2.2");
                 }
             }
+            //todo:semantic error 2.1
             System.err.println(
                     "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + dtype + "'" +
                             "    semantic error 2.1: " +
@@ -406,7 +406,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
             Pattern pattern = Pattern.compile("[-+]?[0-9]*\\.[0-9]+");
             if (pattern.matcher(exp.toString().strip()).matches()) {
                 System.err.println(
-                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                                 "    semantic error 3.3: " +
                                 "It is an integer variable, but the literal is a floating-point type "
                 );
@@ -420,7 +420,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
                 Long.parseLong(answer);
             } catch (NumberFormatException e) {
                 System.err.println(
-                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                                 "    semantic error 3.1: " +
                                 "It is an integer variable, but the literal is a wrong type  "
                 );
@@ -432,7 +432,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
                 long tmp = Long.parseLong(answer);
                 if (tmp > Short.MAX_VALUE || tmp < Short.MIN_VALUE) {
                     System.err.println(
-                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                            "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                                     "    semantic error 3.2: " +
                                     "short is a signed short integer, the input number is out of bounds "
                     );
@@ -468,7 +468,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
 
         if (valuables_names.contains(name)) {
             System.err.println(
-                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                             "    semantic error 1.1: " +
                             "In the same struct space, there cannot be variables with the same name.  "
             );
@@ -487,7 +487,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         String[] arrays = exp.toString().strip().split(" ");
         if (arrays.length != num) {
             System.err.println(
-                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                    "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                             "    semantic error 3.4.1: " +
                             "The length of the array input is not the same as the declared length.  "
             );
@@ -501,7 +501,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
                 }
             } catch (NumberFormatException e) {
                 System.err.println(
-                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " repeated variable '" + ctx.start.getText() + "'" +
+                        "line " + ctx.start.getLine() + ":" + ctx.start.getCharPositionInLine() + " wrong assign '" + ctx.start.getText() + "'" +
                                 "    semantic error 3.4.2: " +
                                 "The data entered in the array is not an integer variable.  "
                 );
