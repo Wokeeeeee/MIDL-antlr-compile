@@ -33,11 +33,14 @@ class Member {
 
 
 class TreeNode {
-    public ArrayList<TreeNode> children = new ArrayList<>();
+    //spec
+    public ArrayList<TreeNode> specification = new ArrayList<>();
 
     enum NODETYPE {
+        NULL,
         MODULE,
-        STRUCT
+        STRUCT,
+        SPEC
     }
 
     public NODETYPE nodetype;
@@ -48,6 +51,7 @@ class TreeNode {
     //struct
     public String struct_id;
     public ArrayList<Member> members = new ArrayList<>();//can be null
+    public ArrayList<TreeNode> inner_structs = new ArrayList<>();
 
     @Override
     public String toString() {
@@ -64,6 +68,29 @@ class TreeNode {
         }
         return sb.toString();
     }
+
+    public String printAST(TreeNode root, int tab_times, StringBuilder output) {
+        switch (root.nodetype) {
+            case MODULE:
+                output.append("\t".repeat(tab_times));
+                output.append("Module ").append(root.module_id).append(" :\n");
+                for (var def : root.definitions)
+                    printAST(def, tab_times + 1, output);
+                break;
+            case SPEC:
+                for (var spec : root.specification) printAST(spec, tab_times, output);
+                break;
+            case STRUCT:
+                output.append("\t".repeat(tab_times));
+                output.append("Struct ").append(root.struct_id).append(" :\n");
+                for (var member : root.members) {
+                    output.append("\t".repeat(tab_times + 1));
+                    output.append(member.toString());
+                }
+                return output.toString();
+        }
+        return output.toString();
+    }
 }
 
 class ASTLoader extends MIDLBaseVisitor<TreeNode> {
@@ -76,7 +103,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         ParseTree tree = parser.specification();
         ASTLoader astLoader = new ASTLoader();
         astLoader.visit(tree);
-        for (var i : astLoader.structs_names) System.out.println(i);
+//        for (var i : astLoader.structs_names) System.out.println(i);
         //  while (!astLoader.exp_queue.isEmpty()) System.out.print(astLoader.exp_queue.poll());
     }
 
@@ -92,10 +119,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     String namespace = "";
 
     //type check
-//    String[] signed_int = {"short", "int16", "long", "int32", "long long", "int64", "int8"};
     ArrayList<String> signed_set = new ArrayList<>(List.of("short", "int16", "long", "int32", "long long", "int64", "int8"));
-    //    String[] unsigned_int = {"unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"};
-//    String[] floating_pt_type = {"float", "double", "long double"};
     ArrayList<String> unsigned_set = new ArrayList<>(List.of("unsigned short", "uint16", "unsigned long", "uint32", "unsigned long long", "uint64", "uint8"));
     ArrayList<String> floating_set = new ArrayList<>(List.of("float", "double", "long double"));
 
@@ -107,12 +131,13 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
      */
     @Override
     public TreeNode visitSpecification(MIDLParser.SpecificationContext ctx) {
-        ArrayList<TreeNode> specification = new ArrayList<>();
+        TreeNode root = new TreeNode();
+        root.nodetype = TreeNode.NODETYPE.SPEC;
         for (int i = 0; i < ctx.getChildCount(); i++) {
-            specification.add(visit(ctx.getChild(i)));
+            root.specification.add(visit(ctx.getChild(i)));
         }
-        for (var spec : specification) System.out.println(spec);
-        return null;
+        new HxxGenerator().GenerateHxx(root);
+        return root;
     }
 
     /**
@@ -206,7 +231,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
         for (int i = 0; i < ctx.getChildCount() / 3; i++) {
             visit(ctx.getChild(3 * i));//type_spec
             visit(ctx.getChild(3 * i + 1));//declaration
-            String type = symbol_stack.pop();
+            String type = symbol_stack.pop().strip();
             Member m = new Member(type);
             m.declarators.putAll(declarator_map);
             treeNode.members.add(m);
@@ -227,7 +252,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     public TreeNode visitType_spec(MIDLParser.Type_specContext ctx) {
         if (ctx.getChild(0).getChild(0).getText().equals("struct")) {
             TreeNode treeNode = visit(ctx.struct_type());
-            symbol_stack.push(treeNode.toString());
+            symbol_stack.push(treeNode.struct_id);
             structs_names.remove(structs_names.size() - 1);
             return treeNode;
         } else {
@@ -244,6 +269,7 @@ class ASTLoader extends MIDLBaseVisitor<TreeNode> {
     @Override
     public TreeNode visitScoped_name(MIDLParser.Scoped_nameContext ctx) {
         StringBuilder dtype = new StringBuilder();
+        dtype.append(namespace);
         for (int i = 0; i < ctx.getChildCount(); i++) {
             if (i == 0 && ctx.getChild(i).getText().equals("::")) continue;
             dtype.append(ctx.getChild(i).getText());
